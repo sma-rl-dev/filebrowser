@@ -12,6 +12,15 @@
 ./tester-env reset    # Remove container and config/database/root volumes
 ```
 
+For isolated scenario runs, pass a run id and port. A non-default run id suffixes the Docker container, image, and volumes so parallel variants do not collide:
+
+```bash
+./tester-env reset --run-id fb-pass --port 18080
+./tester-env deploy --run-id fb-pass --port 18080
+./tester-env seed --run-id fb-pass --port 18080
+./tester-env verify --run-id fb-pass --port 18080
+```
+
 ## Build from Source (required for mutation scenarios)
 
 ```bash
@@ -93,4 +102,4 @@ Browser MCP visibility checks should use http://host.docker.internal:8080, log i
 - Frontend uses `pnpm` + `vite`; backend is Go 1.22+.
 - Uses BoltDB (`filebrowser.db`) for user/settings storage.
 - Quick setup auto-creates the admin user only when the database is missing; using `--password` skips random password generation.
-- The Docker deployment binds Filebrowser to `0.0.0.0:80` in the container and publishes it as `localhost:8080` on the host. Browser MCP runs in a container, so use `http://host.docker.internal:8080` there. Override with `FILEBROWSER_PORT=<port> ./tester-env deploy`.
+- The Docker deployment binds Filebrowser to `0.0.0.0:80` in the container and publishes it as `localhost:8080` on the host. Browser MCP runs in a container, so use `http://host.docker.internal:8080` there. Override with `FILEBROWSER_PORT=<port> ./tester-env deploy` or `./tester-env deploy --port <port>`. Use `--run-id <id>` to isolate Docker names for scenario runner variants.

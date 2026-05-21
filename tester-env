@@ -2,17 +2,26 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE_NAME="${FILEBROWSER_IMAGE:-tester-env-filebrowser}"
-CONTAINER_NAME="${FILEBROWSER_CONTAINER:-tester-env-filebrowser}"
+RUN_ID="${FILEBROWSER_RUN_ID:-default}"
 PORT="${FILEBROWSER_PORT:-8080}"
-CONFIG_VOLUME="${FILEBROWSER_CONFIG_VOLUME:-tester-env-filebrowser-config}"
-DATABASE_VOLUME="${FILEBROWSER_DATABASE_VOLUME:-tester-env-filebrowser-database}"
-ROOT_VOLUME="${FILEBROWSER_ROOT_VOLUME:-tester-env-filebrowser-root}"
 ADMIN_USERNAME="${FILEBROWSER_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${FILEBROWSER_ADMIN_PASSWORD:-adminadminadmin}"
 DEFAULT_ADMIN_PASSWORD_HASH='$2b$10$Z51ThZo1nDeKdb5D3rhfEOB29FbSjz45a9MH68IjjvKkzQ7y3fULe'
 ADMIN_PASSWORD_HASH="${FILEBROWSER_ADMIN_PASSWORD_HASH:-$DEFAULT_ADMIN_PASSWORD_HASH}"
 SEED_MARKER="/srv/.tester-env-seed-version"
+
+refresh_names() {
+  local suffix=""
+  if [[ "$RUN_ID" != "default" ]]; then
+    suffix="-$RUN_ID"
+  fi
+
+  IMAGE_NAME="${FILEBROWSER_IMAGE:-tester-env-filebrowser${suffix}}"
+  CONTAINER_NAME="${FILEBROWSER_CONTAINER:-tester-env-filebrowser${suffix}}"
+  CONFIG_VOLUME="${FILEBROWSER_CONFIG_VOLUME:-tester-env-filebrowser-config${suffix}}"
+  DATABASE_VOLUME="${FILEBROWSER_DATABASE_VOLUME:-tester-env-filebrowser-database${suffix}}"
+  ROOT_VOLUME="${FILEBROWSER_ROOT_VOLUME:-tester-env-filebrowser-root${suffix}}"
+}
 
 log() { printf '==> %s\n' "$*"; }
 
@@ -273,7 +282,7 @@ cmd_logs() {
 
 cmd_help() {
   cat <<EOF
-Usage: ./tester-env <command>
+Usage: ./tester-env <command> [--run-id <id>] [--port <port>]
 
 Commands:
   deploy   Build editable source with Docker and start Filebrowser
@@ -287,19 +296,69 @@ Commands:
 
 Environment:
   FILEBROWSER_PORT=$PORT
+  FILEBROWSER_RUN_ID=$RUN_ID
   FILEBROWSER_ADMIN_USERNAME=$ADMIN_USERNAME
   FILEBROWSER_ADMIN_PASSWORD=$ADMIN_PASSWORD
+
+Options:
+  --run-id <id>  Isolate container, image, and volume names for scenario runs.
+                 Default: default
+  --port <port>  Host port to bind to container port 80.
+                 Default: 8080
 EOF
 }
 
-case "${1:-help}" in
-  deploy) cmd_deploy ;;
-  seed) cmd_seed ;;
-  verify) cmd_verify ;;
-  reset) cmd_reset ;;
-  stop) cmd_stop ;;
-  status) cmd_status ;;
-  logs) cmd_logs ;;
-  help|-h|--help) cmd_help ;;
-  *) cmd_help; exit 2 ;;
-esac
+main() {
+  local cmd="${1:-help}"
+
+  for ((i=2; i<=$#; i++)); do
+    local arg="${!i}"
+    case "$arg" in
+      --run-id)
+        local next=$((i + 1))
+        if [[ $next -le $# ]]; then
+          RUN_ID="${!next}"
+          ((i++))
+        else
+          echo "Error: --run-id requires a value" >&2
+          exit 1
+        fi
+        ;;
+      --port)
+        local next=$((i + 1))
+        if [[ $next -le $# ]]; then
+          PORT="${!next}"
+          ((i++))
+        else
+          echo "Error: --port requires a value" >&2
+          exit 1
+        fi
+        ;;
+      --help|-h)
+        cmd_help
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $arg" >&2
+        cmd_help
+        exit 1
+        ;;
+    esac
+  done
+
+  refresh_names
+
+  case "$cmd" in
+    deploy) cmd_deploy ;;
+    seed) cmd_seed ;;
+    verify) cmd_verify ;;
+    reset) cmd_reset ;;
+    stop) cmd_stop ;;
+    status) cmd_status ;;
+    logs) cmd_logs ;;
+    help|-h|--help) cmd_help ;;
+    *) cmd_help; exit 2 ;;
+  esac
+}
+
+main "$@"

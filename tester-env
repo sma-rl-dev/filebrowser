@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IMAGE_NAME="${FILEBROWSER_IMAGE:-tester-env-filebrowser}"
+CONTAINER_NAME="${FILEBROWSER_CONTAINER:-tester-env-filebrowser}"
+PORT="${FILEBROWSER_PORT:-8080}"
+CONFIG_VOLUME="${FILEBROWSER_CONFIG_VOLUME:-tester-env-filebrowser-config}"
+DATABASE_VOLUME="${FILEBROWSER_DATABASE_VOLUME:-tester-env-filebrowser-database}"
+ROOT_VOLUME="${FILEBROWSER_ROOT_VOLUME:-tester-env-filebrowser-root}"
+ADMIN_USERNAME="${FILEBROWSER_ADMIN_USERNAME:-admin}"
+ADMIN_PASSWORD="${FILEBROWSER_ADMIN_PASSWORD:-adminadminadmin}"
+DEFAULT_ADMIN_PASSWORD_HASH='$2b$10$Z51ThZo1nDeKdb5D3rhfEOB29FbSjz45a9MH68IjjvKkzQ7y3fULe'
+ADMIN_PASSWORD_HASH="${FILEBROWSER_ADMIN_PASSWORD_HASH:-$DEFAULT_ADMIN_PASSWORD_HASH}"
+SEED_MARKER="/srv/.tester-env-seed-version"
+
+log() { printf '==> %s\n' "$*"; }
+
+source_ref() {
+  git -C "$APP_DIR" rev-parse HEAD
+}
+
+cmd_deploy() {
+  local ref
+  ref="$(source_ref)"
+  log "Building $IMAGE_NAME from source ref $ref"
+  docker build \
+    -f "$APP_DIR/Dockerfile.tester-env" \
+    --build-arg COMMIT="$ref" \
+    --build-arg VERSION="tester-env" \
+    -t "$IMAGE_NAME" \
+    "$APP_DIR"
+
+  log "Removing existing container if present"
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+
+  log "Starting http://localhost:$PORT with $ADMIN_USERNAME/$ADMIN_PASSWORD"
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    -p "$PORT:80" \
+    -v "$CONFIG_VOLUME:/config" \
+    -v "$DATABASE_VOLUME:/database" \
+    -v "$ROOT_VOLUME:/srv" \
+    "$IMAGE_NAME" \
+    --address 0.0.0.0 \
+    --port 80 \
+    --root /srv \
+    --database /database/filebrowser.db \
+    --username "$ADMIN_USERNAME" \
+    --password "$ADMIN_PASSWORD_HASH"
+
+  log "Waiting for HTTP health endpoint"
+  for _ in {1..60}; do
+    if curl -fsS "http://localhost:$PORT/health" >/dev/null; then
+      log "Ready: http://localhost:$PORT"
+      return 0
+    fi
+    sleep 1
+  done
+
+  log "Container did not become healthy"
+  docker logs "$CONTAINER_NAME" || true
+  return 1
+}
+
+cmd_reset() {
+  log "Removing container and data volumes"
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  docker volume rm "$CONFIG_VOLUME" "$DATABASE_VOLUME" "$ROOT_VOLUME" >/dev/null 2>&1 || true
+}
+
+cmd_seed() {
+  log "Seeding deterministic Northwind Design Studio file repository"
+  docker exec -i "$CONTAINER_NAME" sh -s <<'EOF'
+set -eu
+rm -rf \
+  "/srv/00_Inbox" \
+  "/srv/01_Projects" \
+  "/srv/02_Finance" \
+  "/srv/03_Archive" \
+  "/srv/Client Contracts" \
+  "/srv/README.md" \
+  "/srv/team-roster.csv" \
+  "/srv/.tester-env-seed-version"
+
+mkdir -p \
+  "/srv/00_Inbox" \
+  "/srv/01_Projects/Atlas_Redesign/assets" \
+  "/srv/01_Projects/Atlas_Redesign/notes" \
+  "/srv/01_Projects/Beacon_Mobile_App/screenshots" \
+  "/srv/02_Finance/2026-Q2" \
+  "/srv/03_Archive" \
+  "/srv/Client Contracts"
+
+cat > "/srv/README.md" <<'FILE'
+# Northwind Design Studio Shared Drive
+
+Deterministic tester-env seed for a small design agency file repository.
+
+Visible anchors for browser checks:
+- 00_Inbox
+- 01_Projects
+- 02_Finance
+- Client Contracts
+FILE
+
+cat > "/srv/team-roster.csv" <<'FILE'
+name,role,location,status
+Mara Lee,Creative Director,Seattle,active
+Jon Bell,Frontend Lead,Portland,active
+Priya Shah,Finance Manager,Remote,active
+Owen Hart,Contract Reviewer,Seattle,onboarding
+FILE
+
+cat > "/srv/00_Inbox/vendor-invoice-2026-04.txt" <<'FILE'
+Vendor: Paper Trail Print Co.
+Invoice: PT-2026-0418
+Amount: 1842.50 USD
+Status: awaiting approval
+Due: 2026-04-30
+FILE
+
+cat > "/srv/00_Inbox/intake-form-template.md" <<'FILE'
+# Client Intake Template
+
+Project name:
+Primary contact:
+Launch window:
+Required deliverables:
+Accessibility requirements:
+FILE
+
+cat > "/srv/01_Projects/Atlas_Redesign/brief.md" <<'FILE'
+# Atlas Redesign Brief
+
+Client: Atlas Outfitters
+Kickoff: 2026-04-06
+Status: design review
+
+Goals:
+- simplify catalogue navigation
+- improve mobile checkout flow
+- prepare launch assets for Q2 campaign
+FILE
+
+cat > "/srv/01_Projects/Atlas_Redesign/assets/logo-moodboard.svg" <<'FILE'
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="80"><rect width="220" height="80" fill="#f4f1ea"/><text x="18" y="48" font-size="24" fill="#1f4f46">Atlas Moodboard</text></svg>
+FILE
+
+cat > "/srv/01_Projects/Atlas_Redesign/notes/wireframes-notes.txt" <<'FILE'
+Wireframe review notes - 2026-04-12
+
+1. Keep the trail map CTA above the fold.
+2. Product filters must retain selected size and colour.
+3. Add comparison card for waterproof jackets.
+FILE
+
+cat > "/srv/01_Projects/Beacon_Mobile_App/release-checklist.md" <<'FILE'
+# Beacon Mobile App Release Checklist
+
+- [x] onboarding copy approved
+- [x] beta build uploaded
+- [ ] support FAQ linked
+- [ ] app store screenshots finalized
+FILE
+
+cat > "/srv/01_Projects/Beacon_Mobile_App/api-endpoints.json" <<'FILE'
+{
+  "project": "Beacon Mobile App",
+  "environment": "staging",
+  "endpoints": ["/api/v1/sessions", "/api/v1/notifications", "/api/v1/profile"]
+}
+FILE
+
+cat > "/srv/01_Projects/Beacon_Mobile_App/screenshots/mobile-home.svg" <<'FILE'
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="220"><rect width="120" height="220" rx="18" fill="#20242c"/><circle cx="60" cy="52" r="22" fill="#7dd3fc"/><text x="24" y="124" font-size="14" fill="white">Beacon</text></svg>
+FILE
+
+cat > "/srv/02_Finance/2026-Q2/invoices-april.csv" <<'FILE'
+invoice,client,amount,status,due_date
+AT-1042,Atlas Outfitters,9800.00,paid,2026-04-15
+BC-2201,Beacon Labs,6400.00,sent,2026-04-28
+NW-0317,Northwind Internal,420.00,draft,2026-05-02
+FILE
+
+cat > "/srv/02_Finance/2026-Q2/budget-forecast.csv" <<'FILE'
+category,april,may,june
+contractors,12000,13500,11800
+software,1650,1650,1725
+travel,800,1200,600
+printing,2400,900,700
+FILE
+
+cat > "/srv/02_Finance/2026-Q2/tax-readme.txt" <<'FILE'
+Quarterly finance notes:
+- reconcile contractor W-9 folder before June 15
+- keep paid and draft invoice rows in the same CSV for sorting checks
+FILE
+
+cat > "/srv/03_Archive/2025-retrospective.md" <<'FILE'
+# 2025 Retrospective
+
+Best launch: Harbor Wellness portal.
+Recurring issue: late approval on final invoice PDFs.
+Improvement target: earlier accessibility review.
+FILE
+
+cat > "/srv/03_Archive/legacy-client-list.csv" <<'FILE'
+client,last_project,archive_reason
+Harbor Wellness,Portal refresh,completed
+Juniper Foods,Brand kit,completed
+FILE
+
+cat > "/srv/Client Contracts/Nimbus-SOW.txt" <<'FILE'
+Statement of Work: Nimbus Analytics landing page
+Status: signed
+Effective date: 2026-03-20
+Included deliverables: copy deck, responsive page build, analytics handoff
+FILE
+
+printf 'filebrowser tester-env seed v1\n' > "/srv/.tester-env-seed-version"
+find /srv -exec touch -t 202605210900.00 {} +
+EOF
+  log "Seed complete"
+}
+
+cmd_verify() {
+  log "Verifying deterministic seed data in container filesystem"
+  docker exec -i "$CONTAINER_NAME" sh -s <<'EOF'
+set -eu
+test -f "/srv/.tester-env-seed-version"
+grep -q "filebrowser tester-env seed v1" "/srv/.tester-env-seed-version"
+test -d "/srv/00_Inbox"
+test -d "/srv/01_Projects/Atlas_Redesign/assets"
+test -d "/srv/01_Projects/Beacon_Mobile_App/screenshots"
+test -d "/srv/02_Finance/2026-Q2"
+test -d "/srv/Client Contracts"
+test -f "/srv/README.md"
+test -f "/srv/team-roster.csv"
+test -f "/srv/01_Projects/Atlas_Redesign/brief.md"
+test -f "/srv/01_Projects/Atlas_Redesign/assets/logo-moodboard.svg"
+test -f "/srv/02_Finance/2026-Q2/invoices-april.csv"
+test -f "/srv/Client Contracts/Nimbus-SOW.txt"
+grep -q "Northwind Design Studio Shared Drive" "/srv/README.md"
+grep -q "Atlas Redesign Brief" "/srv/01_Projects/Atlas_Redesign/brief.md"
+grep -q "BC-2201,Beacon Labs,6400.00,sent,2026-04-28" "/srv/02_Finance/2026-Q2/invoices-april.csv"
+grep -q "Status: signed" "/srv/Client Contracts/Nimbus-SOW.txt"
+[ "$(find /srv -type f | wc -l | tr -d ' ')" = "17" ]
+  [ "$(find /srv -type d | wc -l | tr -d ' ')" = "12" ]
+[ "$(find /srv -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = "8" ]
+EOF
+  log "Seed verification passed"
+}
+
+cmd_stop() {
+  log "Stopping container, preserving volumes"
+  docker stop "$CONTAINER_NAME"
+}
+
+cmd_status() {
+  docker ps -a --filter "name=^/${CONTAINER_NAME}$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+  if curl -fsS "http://localhost:$PORT/health" >/dev/null 2>&1; then
+    log "HTTP OK: http://localhost:$PORT"
+  else
+    log "HTTP not responding: http://localhost:$PORT"
+    return 1
+  fi
+}
+
+cmd_logs() {
+  docker logs -f "$CONTAINER_NAME"
+}
+
+cmd_help() {
+  cat <<EOF
+Usage: ./tester-env <command>
+
+Commands:
+  deploy   Build editable source with Docker and start Filebrowser
+  seed     Populate deterministic realistic file repository data
+  verify   Check deterministic seed data in the container filesystem
+  reset    Stop/remove container and remove config, database, and root volumes
+  stop     Stop container but preserve volumes
+  status   Show container state and check /health
+  logs     Follow container logs
+  help     Show this help
+
+Environment:
+  FILEBROWSER_PORT=$PORT
+  FILEBROWSER_ADMIN_USERNAME=$ADMIN_USERNAME
+  FILEBROWSER_ADMIN_PASSWORD=$ADMIN_PASSWORD
+EOF
+}
+
+case "${1:-help}" in
+  deploy) cmd_deploy ;;
+  seed) cmd_seed ;;
+  verify) cmd_verify ;;
+  reset) cmd_reset ;;
+  stop) cmd_stop ;;
+  status) cmd_status ;;
+  logs) cmd_logs ;;
+  help|-h|--help) cmd_help ;;
+  *) cmd_help; exit 2 ;;
+esac

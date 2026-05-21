@@ -1,0 +1,36 @@
+FROM node:24-alpine AS frontend-builder
+WORKDIR /src/frontend
+RUN corepack enable
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY frontend/ ./
+RUN pnpm run build
+
+FROM golang:1.25-alpine AS backend-builder
+WORKDIR /src
+RUN apk add --no-cache git
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . ./
+COPY --from=frontend-builder /src/frontend/dist ./frontend/dist
+ARG VERSION=tester-env
+ARG COMMIT=unknown
+RUN go build -ldflags='-s -w -X "github.com/filebrowser/filebrowser/v2/version.Version='"${VERSION}"'" -X "github.com/filebrowser/filebrowser/v2/version.CommitSHA='"${COMMIT}"'"' -o /out/filebrowser .
+
+FROM alpine:3.23
+ENV UID=1000 \
+    GID=1000
+RUN apk add --no-cache ca-certificates mailcap tini wget jq && \
+    addgroup -g "$GID" user && \
+    adduser -D -u "$UID" -G user user && \
+    mkdir -p /config /database /srv && \
+    chown -R user:user /config /database /srv
+COPY --chown=user:user --from=backend-builder /out/filebrowser /bin/filebrowser
+COPY --chown=user:user docker/common/ /
+COPY --chown=user:user docker/alpine/ /
+RUN chmod +x /healthcheck.sh /init.sh
+USER user
+VOLUME /srv /config /database
+EXPOSE 80
+HEALTHCHECK --start-period=2s --interval=5s --timeout=3s CMD /healthcheck.sh
+ENTRYPOINT ["tini", "--", "/init.sh"]

@@ -165,7 +165,7 @@ export default {
       this.$emit("update:selected", this.selected);
     },
     createDir: async function () {
-      this.showHover({
+      this.$store.commit("showHover", {
         prompt: "newDir",
         action: null,
         confirm: (url) => {

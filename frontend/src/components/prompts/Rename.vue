@@ -33,7 +33,6 @@
         type="submit"
         :aria-label="$t('buttons.rename')"
         :title="$t('buttons.rename')"
-        :disabled="name === '' || name === oldName"
       >
         {{ $t("buttons.rename") }}
       </button>
@@ -87,7 +86,7 @@ export default {
       this.closeHovers();
     },
     submit: async function () {
-      if (this.name === "" || this.name === this.oldName) {
+      if (this.name === "") {
         return;
       }
       let oldLink = "";

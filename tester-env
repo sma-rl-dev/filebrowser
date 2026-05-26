@@ -16,7 +16,10 @@ refresh_names() {
     suffix="-$RUN_ID"
   fi
 
-  IMAGE_NAME="${FILEBROWSER_IMAGE:-tester-env-filebrowser${suffix}}"
+  # IMAGE_TAG is set by the runner (scripts/rl-env) to a content-addressed
+  # tag so identical (baseline, patch-set) combos share one image. Falls
+  # back to a stable :dev tag for manual invocations.
+  IMAGE_NAME="${IMAGE_TAG:-${FILEBROWSER_IMAGE:-tester-env-filebrowser:dev}}"
   CONTAINER_NAME="${FILEBROWSER_CONTAINER:-tester-env-filebrowser${suffix}}"
   CONFIG_VOLUME="${FILEBROWSER_CONFIG_VOLUME:-tester-env-filebrowser-config${suffix}}"
   DATABASE_VOLUME="${FILEBROWSER_DATABASE_VOLUME:-tester-env-filebrowser-database${suffix}}"

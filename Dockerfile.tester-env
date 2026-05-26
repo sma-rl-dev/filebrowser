@@ -15,7 +15,7 @@ COPY . ./
 COPY --from=frontend-builder /src/frontend/dist ./frontend/dist
 ARG VERSION=tester-env
 ARG COMMIT=unknown
-RUN go build -ldflags='-s -w -X "github.com/filebrowser/filebrowser/v2/version.Version='"${VERSION}"'" -X "github.com/filebrowser/filebrowser/v2/version.CommitSHA='"${COMMIT}"'"' -o /out/filebrowser .
+RUN go build -trimpath -buildvcs=false -ldflags='-s -w -X "github.com/filebrowser/filebrowser/v2/version.Version='"${VERSION}"'" -X "github.com/filebrowser/filebrowser/v2/version.CommitSHA='"${COMMIT}"'"' -o /out/filebrowser .
 
 FROM alpine:3.23
 ENV UID=1000 \

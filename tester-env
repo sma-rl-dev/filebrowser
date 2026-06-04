@@ -9,6 +9,9 @@ ADMIN_PASSWORD="${FILEBROWSER_ADMIN_PASSWORD:-adminadminadmin}"
 DEFAULT_ADMIN_PASSWORD_HASH='$2b$10$Z51ThZo1nDeKdb5D3rhfEOB29FbSjz45a9MH68IjjvKkzQ7y3fULe'
 ADMIN_PASSWORD_HASH="${FILEBROWSER_ADMIN_PASSWORD_HASH:-$DEFAULT_ADMIN_PASSWORD_HASH}"
 SEED_MARKER="/srv/.tester-env-seed-version"
+TESTER_ENV_PROJECT="${TESTER_ENV_PROJECT:-tester-env}"
+TESTER_ENV_APP="${TESTER_ENV_APP:-filebrowser}"
+TESTER_ENV_SCENARIO="${TESTER_ENV_SCENARIO:-manual}"
 
 refresh_names() {
   local suffix=""
@@ -37,6 +40,9 @@ cmd_deploy() {
   ref="$(source_ref)"
   log "Building $IMAGE_NAME from source ref $ref"
   docker build \
+    --label "tester-env.project=${TESTER_ENV_PROJECT}" \
+    --label "tester-env.app=${TESTER_ENV_APP}" \
+    --label "tester-env.scenario=${TESTER_ENV_SCENARIO}" \
     -f "$APP_DIR/Dockerfile.tester-env" \
     --build-arg COMMIT="$ref" \
     --build-arg VERSION="tester-env" \
@@ -45,10 +51,22 @@ cmd_deploy() {
 
   log "Removing existing container if present"
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  for volume in "$CONFIG_VOLUME" "$DATABASE_VOLUME" "$ROOT_VOLUME"; do
+    docker volume create \
+      --label "tester-env.project=${TESTER_ENV_PROJECT}" \
+      --label "tester-env.app=${TESTER_ENV_APP}" \
+      --label "tester-env.scenario=${TESTER_ENV_SCENARIO}" \
+      --label "tester-env.run_id=${TESTER_ENV_RUN_ID:-${RUN_ID}}" \
+      "$volume" >/dev/null
+  done
 
   log "Starting http://localhost:$PORT with $ADMIN_USERNAME/$ADMIN_PASSWORD"
   docker run -d \
     --name "$CONTAINER_NAME" \
+    --label "tester-env.project=${TESTER_ENV_PROJECT}" \
+    --label "tester-env.app=${TESTER_ENV_APP}" \
+    --label "tester-env.scenario=${TESTER_ENV_SCENARIO}" \
+    --label "tester-env.run_id=${TESTER_ENV_RUN_ID:-${RUN_ID}}" \
     -p "$PORT:80" \
     -v "$CONFIG_VOLUME:/config" \
     -v "$DATABASE_VOLUME:/database" \

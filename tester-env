@@ -125,9 +125,9 @@ mkdir -p \
 cat > "/srv/README.md" <<'FILE'
 # Northwind Design Studio Shared Drive
 
-Deterministic tester-env seed for a small design agency file repository.
+Shared project documents and finance records for Northwind Design Studio.
 
-Visible anchors for browser checks:
+Drive folders:
 - 00_Inbox
 - 01_Projects
 - 02_Finance

@@ -8,7 +8,7 @@ ADMIN_USERNAME="${FILEBROWSER_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${FILEBROWSER_ADMIN_PASSWORD:-adminadminadmin}"
 DEFAULT_ADMIN_PASSWORD_HASH='$2b$10$Z51ThZo1nDeKdb5D3rhfEOB29FbSjz45a9MH68IjjvKkzQ7y3fULe'
 ADMIN_PASSWORD_HASH="${FILEBROWSER_ADMIN_PASSWORD_HASH:-$DEFAULT_ADMIN_PASSWORD_HASH}"
-SEED_MARKER="/srv/.tester-env-seed-version"
+SEED_MARKER="/config/.tester-env-seed-version"
 TESTER_ENV_PROJECT="${TESTER_ENV_PROJECT:-tester-env}"
 TESTER_ENV_APP="${TESTER_ENV_APP:-filebrowser}"
 TESTER_ENV_SCENARIO="${TESTER_ENV_SCENARIO:-manual}"
@@ -111,7 +111,8 @@ rm -rf \
   "/srv/Client Contracts" \
   "/srv/README.md" \
   "/srv/team-roster.csv" \
-  "/srv/.tester-env-seed-version"
+  "/srv/.tester-env-seed-version" \
+  "/config/.tester-env-seed-version"
 
 mkdir -p \
   "/srv/00_Inbox" \
@@ -248,7 +249,7 @@ Effective date: 2026-03-20
 Included deliverables: copy deck, responsive page build, analytics handoff
 FILE
 
-printf 'filebrowser tester-env seed v1\n' > "/srv/.tester-env-seed-version"
+printf 'filebrowser tester-env seed v1\n' > "/config/.tester-env-seed-version"
 find /srv -exec touch -t 202605210900.00 {} +
 EOF
   log "Seed complete"
@@ -258,8 +259,9 @@ cmd_verify() {
   log "Verifying deterministic seed data in container filesystem"
   docker exec -i "$CONTAINER_NAME" sh -s <<'EOF'
 set -eu
-test -f "/srv/.tester-env-seed-version"
-grep -q "filebrowser tester-env seed v1" "/srv/.tester-env-seed-version"
+test -f "/config/.tester-env-seed-version"
+grep -q "filebrowser tester-env seed v1" "/config/.tester-env-seed-version"
+test ! -e "/srv/.tester-env-seed-version"
 test -d "/srv/00_Inbox"
 test -d "/srv/01_Projects/Atlas_Redesign/assets"
 test -d "/srv/01_Projects/Beacon_Mobile_App/screenshots"
@@ -275,9 +277,9 @@ grep -q "Northwind Design Studio Shared Drive" "/srv/README.md"
 grep -q "Atlas Redesign Brief" "/srv/01_Projects/Atlas_Redesign/brief.md"
 grep -q "BC-2201,Beacon Labs,6400.00,sent,2026-04-28" "/srv/02_Finance/2026-Q2/invoices-april.csv"
 grep -q "Status: signed" "/srv/Client Contracts/Nimbus-SOW.txt"
-[ "$(find /srv -type f | wc -l | tr -d ' ')" = "17" ]
+[ "$(find /srv -type f | wc -l | tr -d ' ')" = "16" ]
   [ "$(find /srv -type d | wc -l | tr -d ' ')" = "12" ]
-[ "$(find /srv -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = "8" ]
+[ "$(find /srv -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = "7" ]
 EOF
   log "Seed verification passed"
 }

@@ -77,9 +77,10 @@ The seed creates a realistic Northwind Design Studio shared drive under `/srv` w
 
 Stable verification counts after seeding:
 
-- 17 files, including the hidden `.tester-env-seed-version` marker
+- 16 business files; the internal `.tester-env-seed-version` marker is stored
+  separately under `/config`, outside the shared drive
 - 12 directories, including `/srv`
-- 8 first-level entries under `/srv`
+- 7 first-level business entries under `/srv`
 
 `./tester-env seed` is idempotent for its own fixture paths: it removes the known seeded folders/files before recreating them. `./tester-env reset` removes the container and config/database/root volumes, so the next deploy starts with an empty root until seed is run again.
 

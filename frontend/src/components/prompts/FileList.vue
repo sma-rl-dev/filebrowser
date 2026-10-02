@@ -171,7 +171,7 @@ export default {
         confirm: (url) => {
           const paths = url.split("/");
           this.items.push({
-            name: paths[paths.length - 2],
+            name: decodeURIComponent(paths[paths.length - 2]),
             url: url,
           });
         },
